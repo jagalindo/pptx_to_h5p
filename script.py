@@ -1,33 +1,43 @@
+"""Simple PowerPoint (PPTX) to H5P Course Presentation converter.
+
+This script extracts images, text (with basic formatting), simple shapes and
+media from a PowerPoint file and builds the folder structure expected by
+``h5p-cli pack``. Pass ``--pack`` on the command line to automatically invoke
+``h5p-cli`` once conversion finishes.
+"""
+
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 import os
 import json
+import subprocess
 
 def emu_to_px(emu):
     """Convert EMU (English Metric Unit) to pixels (assuming 96 DPI)."""
     return int(emu / 9525)  # 1 pixel = 9525 EMUs at 96 DPI
 
-def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content'):
+def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
     """
     Converts a PPTX file into an H5P Course Presentation package structure.
-    
+
     Parameters:
-    - input_pptx: Path to the .pptx file.
-    - output_dir: Directory where the H5P content folder will be created.
-    
-    After running, you'll have:
-    - output_dir/
-      - h5p.json
-      - content/
-        - content.json
-        - images/
-          - slideX_imgY.ext
-    Use 'h5p-cli pack <output_dir>' to create the final .h5p file.
+      input_pptx -- path to the ``.pptx`` file.
+      output_dir -- destination folder for the generated H5P directory tree.
+      pack -- when ``True`` automatically invoke ``h5p-cli pack``.
+
+    The resulting folder contains ``h5p.json`` plus a ``content`` directory
+    with ``content.json`` and copied media assets.  Images are stored in
+    ``images/`` and audio or video in ``media/``.
     """
-    prs = Presentation(input_pptx)
+    try:
+        prs = Presentation(input_pptx)
+    except Exception as exc:
+        raise RuntimeError(f"Unable to open PPTX file: {exc}")
     content_dir = os.path.join(output_dir, 'content')
     images_dir = os.path.join(content_dir, 'images')
+    media_dir = os.path.join(content_dir, 'media')
     os.makedirs(images_dir, exist_ok=True)
+    os.makedirs(media_dir, exist_ok=True)
 
     slides = []
     for idx, slide in enumerate(prs.slides, start=1):
@@ -58,10 +68,18 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content'):
 
             # Handle text
             elif shape.has_text_frame:
-                text = "\n".join(
-                    "".join(run.text for run in para.runs)
-                    for para in shape.text_frame.paragraphs
-                ).strip()
+                paragraphs = []
+                for para in shape.text_frame.paragraphs:
+                    runs = []
+                    for run in para.runs:
+                        style = {}
+                        if run.font.size:
+                            style['size'] = run.font.size.pt
+                        if run.font.color and run.font.color.rgb:
+                            style['color'] = str(run.font.color.rgb)
+                        runs.append({'text': run.text, 'style': style})
+                    paragraphs.append({'runs': runs})
+                text = "\n".join(''.join(r['text'] for r in p['runs']) for p in paragraphs).strip()
                 if text:
                     slide_dict['elements'].append({
                         'type':   'text',
@@ -69,15 +87,53 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content'):
                         'x':      left,
                         'y':      top,
                         'width':  width,
+                        'height': height,
+                        'detail': paragraphs
+                    })
+
+            # Handle basic shapes
+            elif shape.shape_type == MSO_SHAPE_TYPE.AUTO_SHAPE:
+                fill_color = None
+                if shape.fill.type and getattr(shape.fill.fore_color, 'rgb', None):
+                    fill_color = str(shape.fill.fore_color.rgb)
+                slide_dict['elements'].append({
+                    'type':   'shape',
+                    'x':      left,
+                    'y':      top,
+                    'width':  width,
+                    'height': height,
+                    'fill':   fill_color
+                })
+
+            # Handle media shapes
+            elif shape.shape_type == MSO_SHAPE_TYPE.MEDIA:
+                try:
+                    media = shape.part.related_parts[shape._element.blip_rId]
+                    ext = os.path.splitext(media.partname)[1].lstrip('.')
+                    media_filename = f'media/slide{idx}_media{shape_idx}.{ext}'
+                    media_path = os.path.join(content_dir, media_filename)
+                    with open(media_path, 'wb') as mfile:
+                        mfile.write(media.blob)
+                    slide_dict['elements'].append({
+                        'type':   'media',
+                        'path':   media_filename,
+                        'x':      left,
+                        'y':      top,
+                        'width':  width,
                         'height': height
                     })
+                except Exception:
+                    pass
 
         slides.append(slide_dict)
 
     # Write content.json
     content = {'slides': slides}
-    with open(os.path.join(content_dir, 'content.json'), 'w', encoding='utf-8') as f:
-        json.dump(content, f, ensure_ascii=False, indent=2)
+    try:
+        with open(os.path.join(content_dir, 'content.json'), 'w', encoding='utf-8') as f:
+            json.dump(content, f, ensure_ascii=False, indent=2)
+    except OSError as exc:
+        raise RuntimeError(f"Failed to write content.json: {exc}")
 
     # Write h5p.json (package definition)
     h5p_json = {
@@ -91,12 +147,21 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content'):
         ],
         "embedTypes": ["div"]
     }
-    with open(os.path.join(output_dir, 'h5p.json'), 'w', encoding='utf-8') as f:
-        json.dump(h5p_json, f, ensure_ascii=False, indent=2)
+    try:
+        with open(os.path.join(output_dir, 'h5p.json'), 'w', encoding='utf-8') as f:
+            json.dump(h5p_json, f, ensure_ascii=False, indent=2)
+    except OSError as exc:
+        raise RuntimeError(f"Failed to write h5p.json: {exc}")
 
     print(f"H5P package structure generated in '{output_dir}'.")
-    print("Run 'h5p-cli pack', for example:")
-    print(f"    h5p-cli pack {output_dir}")
+    if pack:
+        try:
+            subprocess.run(["h5p-cli", "pack", output_dir], check=True)
+        except Exception as exc:
+            print(f"Packing failed: {exc}")
+    else:
+        print("Run 'h5p-cli pack' to create the .h5p archive, for example:")
+        print(f"    h5p-cli pack {output_dir}")
 
 if __name__ == "__main__":
     import argparse
@@ -104,7 +169,9 @@ if __name__ == "__main__":
     parser.add_argument("pptx_file", help="Path to the .pptx file to convert")
     parser.add_argument("-o", "--output", default="h5p_content",
                         help="Output directory for the H5P package structure")
+    parser.add_argument("--pack", action="store_true",
+                        help="Pack the generated directory into an .h5p file using h5p-cli")
     args = parser.parse_args()
 
-    convert_pptx_to_h5p(args.pptx_file, args.output)
+    convert_pptx_to_h5p(args.pptx_file, args.output, pack=args.pack)
 
