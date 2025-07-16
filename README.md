@@ -7,8 +7,16 @@ This tool converts a PowerPoint presentation into an H5P Course Presentation pac
 - `python-pptx`
 - `h5p-cli` (optional, for packaging)
 
-Install dependencies with:
+It is recommended to use a virtual environment. Create one with:
 ```bash
+./setup_env.sh
+```
+This script creates a `.venv` folder and installs the requirements.
+
+If you prefer to do it manually, run:
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
