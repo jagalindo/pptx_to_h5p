@@ -33,6 +33,13 @@ docker build -t jagalindo/h5p-cli .
 ```
 Updating the image ensures the bundled H5P libraries are up to date.
 
+If you encounter messages such as `cp: cannot stat '/usr/local/lib/h5p/...'`,
+the Docker image may be missing those libraries. Pull the latest image again:
+
+```bash
+docker pull jagalindo/h5p-cli:latest
+```
+
 ## Usage
 ```bash
 python script.py myslides.pptx -o output_dir --pack
