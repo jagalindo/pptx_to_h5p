@@ -38,8 +38,10 @@ Updating the image ensures the bundled H5P libraries are up to date.
 python script.py myslides.pptx -o output_dir --pack
 ```
 The `--pack` flag copies the default H5P libraries from the Docker image and
-creates a `.h5p` archive by zipping the output directory. Without the flag, you
-can copy the libraries and zip the directory manually:
+creates a `.h5p` archive. Libraries are copied under `.h5p/libraries` inside the
+output directory but the final archive places them at the package root just like
+`h5p-cli pack` does. Without the flag, you can copy the libraries and zip the
+directory manually:
 ```bash
 docker run --rm -v /path/to/output_dir:/data jagalindo/h5p-cli \
   sh -c 'mkdir -p /data/.h5p && cp -r /usr/local/lib/h5p/* /data/.h5p/'
