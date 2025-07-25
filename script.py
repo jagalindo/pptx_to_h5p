@@ -19,7 +19,8 @@ def copy_extensions(target_dir):
         "docker", "run", "--rm",
         "-v", f"{os.path.abspath(target_dir)}:/data",
         "jagalindo/h5p-cli",
-        "sh", "-c", "cp -r /root/.h5p /data/"
+        "sh", "-c",
+        "mkdir -p /data/.h5p && cp -r /usr/local/lib/h5p/* /data/.h5p/"
     ], check=True)
 
 def emu_to_px(emu):

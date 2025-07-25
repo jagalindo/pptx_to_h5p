@@ -27,5 +27,5 @@ python script.py myslides.pptx -o output_dir --pack
 The `--pack` flag uses the Docker image `jagalindo/h5p-cli` to produce a `.h5p` archive automatically. It first copies the default extensions from the image and then packs the directory. Without the flag, you can do the same manually with:
 ```bash
 docker run --rm -v /path/to/output_dir:/data jagalindo/h5p-cli \
-  sh -c 'cp -r /root/.h5p /data/ && h5p-cli pack /data'
+  sh -c 'mkdir -p /data/.h5p && cp -r /usr/local/lib/h5p/* /data/.h5p/ && h5p-cli pack /data'
 ```
