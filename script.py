@@ -324,6 +324,9 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False, recurs
     text_ver = _get_latest_library_version("H5P.Text")
     image_ver = _get_latest_library_version("H5P.Image")
 
+    if pack and (None in cp_ver or None in text_ver or None in image_ver):
+        print("Warning: unable to detect library versions. Ensure Docker is installed and run 'docker pull jagalindo/h5p-cli:latest' if packaging fails.")
+
     h5p_json = {
         "title": os.path.splitext(os.path.basename(input_pptx))[0],
         "mainLibrary": "H5P.CoursePresentation",
