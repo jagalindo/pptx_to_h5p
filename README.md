@@ -46,9 +46,9 @@ manually and zip the directory:
 ```bash
 docker run --rm -v /path/to/output_dir:/data jagalindo/h5p-cli \
   sh -c 'mkdir -p /data/.h5p && cp -r \
-    /usr/local/lib/h5p/H5P.CoursePresentation-1.23 \
-    /usr/local/lib/h5p/H5P.Text-1.5 \
-    /usr/local/lib/h5p/H5P.Image-1.3 \
+    /usr/local/lib/h5p/H5P.CoursePresentation-1.23* \
+    /usr/local/lib/h5p/H5P.Text-1.5* \
+    /usr/local/lib/h5p/H5P.Image-1.3* \
     /data/.h5p/libraries/'
 cd output_dir && zip -r ../output_dir.h5p .
 ```
