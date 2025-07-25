@@ -1,11 +1,11 @@
 # PPTX to H5P Converter
 
-This tool converts a PowerPoint presentation into an H5P Course Presentation package. It extracts images, text, simple shapes and media files, generating a directory ready for packaging with the `h5p` command (from the `@lumieducation/h5p-cli` package) or the `jagalindo/h5p-cli` Docker image.
+This tool converts a PowerPoint presentation into an H5P Course Presentation package. It extracts images, text, simple shapes and media files, generating a directory ready to be zipped into a `.h5p` archive. The optional `--pack` flag copies the required libraries from the `jagalindo/h5p-cli` Docker image and creates the archive automatically.
 
 ## Requirements
 - Python 3.8+
 - `python-pptx`
-- Docker (for packaging with the `jagalindo/h5p-cli` image)
+- Docker (used by the `--pack` option to copy libraries)
 
 It is recommended to use a virtual environment. Create one with:
 ```bash
@@ -31,14 +31,17 @@ git clone https://github.com/jagalindo/h5p-cli.git
 cd h5p-cli
 docker build -t jagalindo/h5p-cli .
 ```
-Updating the image ensures the bundled `h5p` CLI includes the `pack` command.
+Updating the image ensures the bundled H5P libraries are up to date.
 
 ## Usage
 ```bash
 python script.py myslides.pptx -o output_dir --pack
 ```
-The `--pack` flag uses the Docker image `jagalindo/h5p-cli` to produce a `.h5p` archive automatically. It first copies the default extensions from the image and then packs the directory. Without the flag, you can do the same manually with:
+The `--pack` flag copies the default H5P libraries from the Docker image and
+creates a `.h5p` archive by zipping the output directory. Without the flag, you
+can copy the libraries and zip the directory manually:
 ```bash
 docker run --rm -v /path/to/output_dir:/data jagalindo/h5p-cli \
-  sh -c 'mkdir -p /data/.h5p && cp -r /usr/local/lib/h5p/* /data/.h5p/ && h5p pack /data || h5p-cli pack /data'
+  sh -c 'mkdir -p /data/.h5p && cp -r /usr/local/lib/h5p/* /data/.h5p/'
+cd output_dir && zip -r ../output_dir.h5p .
 ```
