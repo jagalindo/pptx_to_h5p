@@ -2,8 +2,8 @@
 
 This script extracts images, text (with basic formatting), simple shapes and
 media from a PowerPoint file and builds the folder structure expected by
-``h5p-cli pack``. Pass ``--pack`` on the command line to automatically invoke
-``h5p-cli`` once conversion finishes.
+``h5p pack`` (or ``h5p-cli pack``). Pass ``--pack`` on the command line to
+automatically invoke the CLI once conversion finishes.
 """
 
 from pptx import Presentation
@@ -36,7 +36,8 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
     Parameters:
       input_pptx -- path to the ``.pptx`` file.
       output_dir -- destination folder for the generated H5P directory tree.
-      pack -- when ``True`` automatically invoke ``h5p-cli pack``.
+      pack -- when ``True`` automatically invoke ``h5p`` (or ``h5p-cli``)
+              to pack the output directory.
 
     The resulting folder contains ``h5p.json`` plus a ``content`` directory
     with ``content.json`` and copied media assets.  Images are stored in
@@ -186,7 +187,7 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
                 "-v", f"{os.path.abspath(output_dir)}:/data",
                 "jagalindo/h5p-cli",
                 "sh", "-c",
-                "h5p-cli pack /data"
+                "h5p pack /data || h5p-cli pack /data"
             ], check=True)
         except Exception as exc:
             print(f"Packing failed: {exc}")
@@ -197,7 +198,7 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
         abs_dir = os.path.abspath(output_dir)
         print(
             "    docker run --rm -v "
-            f"{abs_dir}:/data jagalindo/h5p-cli sh -c 'cp -r /root/.h5p /data/ && h5p-cli pack /data'"
+            f"{abs_dir}:/data jagalindo/h5p-cli sh -c 'cp -r /root/.h5p /data/ && h5p pack /data || h5p-cli pack /data'"
         )
 
 if __name__ == "__main__":
