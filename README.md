@@ -20,6 +20,19 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Getting the Docker Image
+Pull the latest `jagalindo/h5p-cli` image with:
+```bash
+docker pull jagalindo/h5p-cli:latest
+```
+You can also build it from source if desired:
+```bash
+git clone https://github.com/jagalindo/h5p-cli.git
+cd h5p-cli
+docker build -t jagalindo/h5p-cli .
+```
+Updating the image ensures the bundled `h5p` CLI includes the `pack` command.
+
 ## Usage
 ```bash
 python script.py myslides.pptx -o output_dir --pack
