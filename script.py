@@ -33,20 +33,63 @@ def _docker_cat(path):
     return result.stdout
 
 
+def _docker_ls(path):
+    """Return directory listing of ``path`` inside the ``jagalindo/h5p-cli`` image."""
+    result = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "jagalindo/h5p-cli",
+            "sh",
+            "-c",
+            f"ls -1 {path} 2>/dev/null",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout
+
+
+def _get_latest_library_version(machine_name):
+    """Return the highest major/minor version tuple for ``machine_name``."""
+    try:
+        output = _docker_ls("/usr/local/lib/h5p")
+    except subprocess.CalledProcessError:
+        return None, None
+
+    versions = []
+    prefix = f"{machine_name}-"
+    for line in output.splitlines():
+        if line.startswith(prefix):
+            _, ver = line.split("-", 1)
+            parts = ver.split(".")
+            if len(parts) == 2 and all(p.isdigit() for p in parts):
+                versions.append((int(parts[0]), int(parts[1])))
+
+    if not versions:
+        return None, None
+
+    versions.sort()
+    return versions[-1]
+
+
 def _collect_dependencies(machine_name, major, minor, seen):
     """Recursively collect dependency directories for a library."""
     key = f"{machine_name}-{major}.{minor}"
     if key in seen:
         return
-    seen.add(key)
 
     # Read the library.json from the Docker image to find further dependencies
     lib_path = f"/usr/local/lib/h5p/{key}/library.json"
     try:
         data = json.loads(_docker_cat(lib_path))
     except subprocess.CalledProcessError:
-        # If the library isn't found just record it and continue
+        # If the library isn't found just skip it
         return
+
+    seen.add(key)
 
     for dep in data.get("preloadedDependencies", []):
         _collect_dependencies(
@@ -79,20 +122,23 @@ def copy_extensions(target_dir):
     # Copy the collected libraries from the Docker image
     abs_target = os.path.abspath(target_dir)
     for lib in libs:
-        subprocess.run(
-            [
-                "docker",
-                "run",
-                "--rm",
-                "-v",
-                f"{abs_target}:/data",
-                "jagalindo/h5p-cli",
-                "sh",
-                "-c",
-                f"mkdir -p /data/.h5p/libraries && cp -r /usr/local/lib/h5p/{lib} /data/.h5p/libraries/",
-            ],
-            check=True,
-        )
+        try:
+            subprocess.run(
+                [
+                    "docker",
+                    "run",
+                    "--rm",
+                    "-v",
+                    f"{abs_target}:/data",
+                    "jagalindo/h5p-cli",
+                    "sh",
+                    "-c",
+                    f"mkdir -p /data/.h5p/libraries && cp -r /usr/local/lib/h5p/{lib} /data/.h5p/libraries/",
+                ],
+                check=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            print(f"Warning: failed to copy {lib}: {exc}")
 
 def emu_to_px(emu):
     """Convert EMU (English Metric Unit) to pixels (assuming 96 DPI)."""
@@ -263,17 +309,33 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
     except OSError as exc:
         raise RuntimeError(f"Failed to write content.json: {exc}")
 
-    # Write h5p.json (package definition)
+    # Determine library versions from the Docker image if possible
+    cp_ver = _get_latest_library_version("H5P.CoursePresentation")
+    text_ver = _get_latest_library_version("H5P.Text")
+    image_ver = _get_latest_library_version("H5P.Image")
+
     h5p_json = {
         "title": os.path.splitext(os.path.basename(input_pptx))[0],
         "mainLibrary": "H5P.CoursePresentation",
         "language": "en",
         "preloadedDependencies": [
-            {"machineName": "H5P.CoursePresentation", "majorVersion": 1, "minorVersion": 23},
-            {"machineName": "H5P.Text",               "majorVersion": 1, "minorVersion": 5},
-            {"machineName": "H5P.Image",              "majorVersion": 1, "minorVersion": 3}
+            {
+                "machineName": "H5P.CoursePresentation",
+                "majorVersion": (cp_ver[0] if cp_ver[0] is not None else 1),
+                "minorVersion": (cp_ver[1] if cp_ver[1] is not None else 23),
+            },
+            {
+                "machineName": "H5P.Text",
+                "majorVersion": (text_ver[0] if text_ver[0] is not None else 1),
+                "minorVersion": (text_ver[1] if text_ver[1] is not None else 5),
+            },
+            {
+                "machineName": "H5P.Image",
+                "majorVersion": (image_ver[0] if image_ver[0] is not None else 1),
+                "minorVersion": (image_ver[1] if image_ver[1] is not None else 3),
+            },
         ],
-        "embedTypes": ["div"]
+        "embedTypes": ["div"],
     }
     try:
         with open(os.path.join(output_dir, 'h5p.json'), 'w', encoding='utf-8') as f:
