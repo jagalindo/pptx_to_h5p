@@ -15,15 +15,63 @@ import subprocess
 import zipfile
 
 
-def copy_extensions(target_dir):
-    """Copy H5P extensions from the Docker image into ``target_dir``."""
-    subprocess.run([
-        "docker", "run", "--rm",
-        "-v", f"{os.path.abspath(target_dir)}:/data",
-        "jagalindo/h5p-cli",
-        "sh", "-c",
-        "mkdir -p /data/.h5p && cp -r /usr/local/lib/h5p/* /data/.h5p/"
-    ], check=True)
+def _fetch_library_metadata(machine, major, minor):
+    """Return the parsed ``library.json`` for a library in the Docker image."""
+    lib_dir = f"/usr/local/lib/h5p/{machine}-{major}.{minor}/library.json"
+    result = subprocess.run(
+        ["docker", "run", "--rm", "jagalindo/h5p-cli", "cat", lib_dir],
+        capture_output=True, text=True, check=True,
+    )
+    return json.loads(result.stdout)
+
+
+def _resolve_dependencies(initial_deps):
+    """Return a list of all required libraries resolved recursively."""
+    resolved = []
+    seen = set()
+    queue = list(initial_deps)
+    while queue:
+        dep = queue.pop()
+        key = f"{dep['machineName']}-{dep['majorVersion']}.{dep['minorVersion']}"
+        if key in seen:
+            continue
+        seen.add(key)
+        resolved.append(dep)
+        try:
+            meta = _fetch_library_metadata(
+                dep["machineName"], dep["majorVersion"], dep["minorVersion"]
+            )
+        except Exception:
+            continue
+        queue.extend(meta.get("preloadedDependencies", []))
+        queue.extend(meta.get("editorDependencies", []))
+    return resolved
+
+
+def copy_extensions(target_dir, dependencies):
+    """Copy required H5P libraries from Docker into ``target_dir``."""
+    library_dirs = " ".join(
+        f"/usr/local/lib/h5p/{d['machineName']}-{d['majorVersion']}.{d['minorVersion']}"
+        for d in dependencies
+    )
+    cmd = (
+        "mkdir -p /data/.h5p/libraries && "
+        f"cp -r {library_dirs} /data/.h5p/libraries/"
+    )
+    subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{os.path.abspath(target_dir)}:/data",
+            "jagalindo/h5p-cli",
+            "sh",
+            "-c",
+            cmd,
+        ],
+        check=True,
+    )
 
 def emu_to_px(emu):
     """Convert EMU (English Metric Unit) to pixels (assuming 96 DPI)."""
@@ -215,7 +263,8 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
     print(f"H5P package structure generated in '{output_dir}'.")
     if pack:
         try:
-            copy_extensions(output_dir)
+            deps = _resolve_dependencies(h5p_json["preloadedDependencies"])
+            copy_extensions(output_dir, deps)
             archive = create_h5p_archive(output_dir)
             print(f"Packed into '{archive}'.")
         except Exception as exc:
