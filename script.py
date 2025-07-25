@@ -15,40 +15,12 @@ import subprocess
 import zipfile
 
 
-def _find_library_dir(machine, major, minor):
-    """Return the directory for a library in the Docker image or ``None``."""
-    pattern = f"/usr/local/lib/h5p/{machine}-{major}.{minor}*"
-    try:
-        result = subprocess.run(
-            [
-                "docker",
-                "run",
-                "--rm",
-                "jagalindo/h5p-cli",
-                "sh",
-                "-c",
-                f"ls -d {pattern} 2>/dev/null | head -n 1",
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        path = result.stdout.strip()
-    except Exception:
-        return None
-    return path or None
-
-
 def _fetch_library_metadata(machine, major, minor):
     """Return the parsed ``library.json`` for a library in the Docker image."""
-    lib_dir = _find_library_dir(machine, major, minor)
-    if not lib_dir:
-        raise FileNotFoundError(f"Library {machine}-{major}.{minor} not found")
+    lib_dir = f"/usr/local/lib/h5p/{machine}-{major}.{minor}/library.json"
     result = subprocess.run(
-        ["docker", "run", "--rm", "jagalindo/h5p-cli", "cat", f"{lib_dir}/library.json"],
-        capture_output=True,
-        text=True,
-        check=True,
+        ["docker", "run", "--rm", "jagalindo/h5p-cli", "cat", lib_dir],
+        capture_output=True, text=True, check=True,
     )
     return json.loads(result.stdout)
 
@@ -76,34 +48,15 @@ def _resolve_dependencies(initial_deps):
     return resolved
 
 
-def _load_h5p_dependencies(h5p_json_path):
-    """Load dependency lists from an ``h5p.json`` file."""
-    try:
-        with open(h5p_json_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception as exc:
-        raise RuntimeError(f"Unable to read {h5p_json_path}: {exc}")
-
-    deps = []
-    deps.extend(data.get("preloadedDependencies", []))
-    deps.extend(data.get("editorDependencies", []))
-    return deps
-
 def copy_extensions(target_dir, dependencies):
     """Copy required H5P libraries from Docker into ``target_dir``."""
-    library_dirs = []
-    for dep in dependencies:
-        lib_dir = _find_library_dir(
-            dep["machineName"], dep["majorVersion"], dep["minorVersion"]
-        )
-        if lib_dir:
-            library_dirs.append(lib_dir)
-    if not library_dirs:
-        return
-    dirs_str = " ".join(library_dirs)
+    library_dirs = " ".join(
+        f"/usr/local/lib/h5p/{d['machineName']}-{d['majorVersion']}.{d['minorVersion']}"
+        for d in dependencies
+    )
     cmd = (
         "mkdir -p /data/.h5p/libraries && "
-        f"cp -r {dirs_str} /data/.h5p/libraries/"
+        f"cp -r {library_dirs} /data/.h5p/libraries/"
     )
     subprocess.run(
         [
@@ -315,8 +268,7 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
     print(f"H5P package structure generated in '{output_dir}'.")
     if pack:
         try:
-            deps_to_resolve = _load_h5p_dependencies(h5p_path)
-            deps = _resolve_dependencies(deps_to_resolve)
+            deps = _resolve_dependencies(h5p_json["preloadedDependencies"])
             copy_extensions(output_dir, deps)
             archive = create_h5p_archive(output_dir)
             print(f"Packed into '{archive}'.")
