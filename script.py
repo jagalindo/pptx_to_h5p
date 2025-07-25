@@ -156,12 +156,21 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
     print(f"H5P package structure generated in '{output_dir}'.")
     if pack:
         try:
-            subprocess.run(["h5p-cli", "pack", output_dir], check=True)
+            subprocess.run([
+                "docker", "run", "--rm",
+                "-v", f"{os.path.abspath(output_dir)}:/data",
+                "jagalindo/h5p_cli_docker",
+                "h5p", "pack", "/data"
+            ], check=True)
         except Exception as exc:
             print(f"Packing failed: {exc}")
     else:
-        print("Run 'h5p-cli pack' to create the .h5p archive, for example:")
-        print(f"    h5p-cli pack {output_dir}")
+        print("Run the Docker image 'jagalindo/h5p_cli_docker' to create the .h5p archive, for example:")
+        abs_dir = os.path.abspath(output_dir)
+        print(
+            "    docker run --rm -v "
+            f"{abs_dir}:/data jagalindo/h5p_cli_docker h5p pack /data"
+        )
 
 if __name__ == "__main__":
     import argparse
@@ -169,8 +178,14 @@ if __name__ == "__main__":
     parser.add_argument("pptx_file", help="Path to the .pptx file to convert")
     parser.add_argument("-o", "--output", default="h5p_content",
                         help="Output directory for the H5P package structure")
-    parser.add_argument("--pack", action="store_true",
-                        help="Pack the generated directory into an .h5p file using h5p-cli")
+    parser.add_argument(
+        "--pack",
+        action="store_true",
+        help=(
+            "Pack the generated directory into an .h5p file using the "
+            "jagalindo/h5p_cli_docker image"
+        ),
+    )
     args = parser.parse_args()
 
     convert_pptx_to_h5p(args.pptx_file, args.output, pack=args.pack)
