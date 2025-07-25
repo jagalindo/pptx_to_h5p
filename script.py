@@ -33,17 +33,34 @@ def emu_to_px(emu):
 
 
 def create_h5p_archive(source_dir, archive_path=None):
-    """Create a .h5p file by zipping ``source_dir``."""
+    """Create a .h5p file from ``source_dir`` following ``h5p-cli pack`` semantics."""
     if archive_path is None:
         archive_path = os.path.abspath(source_dir) + ".h5p"
     elif not archive_path.endswith(".h5p"):
         archive_path += ".h5p"
+
+    library_root = os.path.join(source_dir, ".h5p", "libraries")
+
     with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for root, _, files in os.walk(source_dir):
+            # Skip the internal .h5p directory altogether
+            if os.path.relpath(root, source_dir).startswith(".h5p"):
+                continue
             for fname in files:
                 fpath = os.path.join(root, fname)
                 arcname = os.path.relpath(fpath, source_dir)
                 zf.write(fpath, arcname)
+
+        # Libraries are stored under .h5p/libraries but must appear at the
+        # archive root.  Only copy the libraries themselves.
+        if os.path.isdir(library_root):
+            for lib in os.listdir(library_root):
+                lib_path = os.path.join(library_root, lib)
+                for root, _, files in os.walk(lib_path):
+                    for fname in files:
+                        fpath = os.path.join(root, fname)
+                        arcname = os.path.relpath(fpath, library_root)
+                        zf.write(fpath, arcname)
     return archive_path
 
 def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
