@@ -75,8 +75,14 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
                         style = {}
                         if run.font.size:
                             style['size'] = run.font.size.pt
-                        if run.font.color and run.font.color.rgb:
-                            style['color'] = str(run.font.color.rgb)
+                        color = None
+                        if run.font.color:
+                            try:
+                                color = run.font.color.rgb
+                            except AttributeError:
+                                color = None
+                        if color:
+                            style['color'] = str(color)
                         runs.append({'text': run.text, 'style': style})
                     paragraphs.append({'runs': runs})
                 text = "\n".join(''.join(r['text'] for r in p['runs']) for p in paragraphs).strip()
@@ -94,8 +100,13 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
             # Handle basic shapes
             elif shape.shape_type == MSO_SHAPE_TYPE.AUTO_SHAPE:
                 fill_color = None
-                if shape.fill.type and getattr(shape.fill.fore_color, 'rgb', None):
-                    fill_color = str(shape.fill.fore_color.rgb)
+                if shape.fill.type:
+                    try:
+                        color_attr = shape.fill.fore_color.rgb
+                    except AttributeError:
+                        color_attr = None
+                    if color_attr:
+                        fill_color = str(color_attr)
                 slide_dict['elements'].append({
                     'type':   'shape',
                     'x':      left,
