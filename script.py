@@ -15,15 +15,84 @@ import subprocess
 import zipfile
 
 
+def _docker_cat(path):
+    """Return the contents of ``path`` inside the ``jagalindo/h5p-cli`` image."""
+    result = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "jagalindo/h5p-cli",
+            "cat",
+            path,
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout
+
+
+def _collect_dependencies(machine_name, major, minor, seen):
+    """Recursively collect dependency directories for a library."""
+    key = f"{machine_name}-{major}.{minor}"
+    if key in seen:
+        return
+    seen.add(key)
+
+    # Read the library.json from the Docker image to find further dependencies
+    lib_path = f"/usr/local/lib/h5p/{key}/library.json"
+    try:
+        data = json.loads(_docker_cat(lib_path))
+    except subprocess.CalledProcessError:
+        # If the library isn't found just record it and continue
+        return
+
+    for dep in data.get("preloadedDependencies", []):
+        _collect_dependencies(
+            dep.get("machineName"),
+            dep.get("majorVersion"),
+            dep.get("minorVersion"),
+            seen,
+        )
+
+
 def copy_extensions(target_dir):
-    """Copy H5P extensions from the Docker image into ``target_dir``."""
-    subprocess.run([
-        "docker", "run", "--rm",
-        "-v", f"{os.path.abspath(target_dir)}:/data",
-        "jagalindo/h5p-cli",
-        "sh", "-c",
-        "mkdir -p /data/.h5p && cp -r /usr/local/lib/h5p/* /data/.h5p/"
-    ], check=True)
+    """Copy only the required H5P libraries into ``target_dir``."""
+
+    h5p_json_path = os.path.join(target_dir, "h5p.json")
+    with open(h5p_json_path, "r", encoding="utf-8") as f:
+        h5p_def = json.load(f)
+
+    libs = set()
+    for dep in h5p_def.get("preloadedDependencies", []):
+        _collect_dependencies(
+            dep.get("machineName"),
+            dep.get("majorVersion"),
+            dep.get("minorVersion"),
+            libs,
+        )
+
+    if not libs:
+        return
+
+    # Copy the collected libraries from the Docker image
+    abs_target = os.path.abspath(target_dir)
+    for lib in libs:
+        subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{abs_target}:/data",
+                "jagalindo/h5p-cli",
+                "sh",
+                "-c",
+                f"mkdir -p /data/.h5p/libraries && cp -r /usr/local/lib/h5p/{lib} /data/.h5p/libraries/",
+            ],
+            check=True,
+        )
 
 def emu_to_px(emu):
     """Convert EMU (English Metric Unit) to pixels (assuming 96 DPI)."""

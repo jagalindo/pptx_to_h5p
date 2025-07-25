@@ -1,6 +1,6 @@
 # PPTX to H5P Converter
 
-This tool converts a PowerPoint presentation into an H5P Course Presentation package. It extracts images, text, simple shapes and media files, generating a directory ready to be zipped into a `.h5p` archive. The optional `--pack` flag copies the required libraries from the `jagalindo/h5p-cli` Docker image and creates the archive automatically.
+This tool converts a PowerPoint presentation into an H5P Course Presentation package. It extracts images, text, simple shapes and media files, generating a directory ready to be zipped into a `.h5p` archive. The optional `--pack` flag copies only the libraries referenced in the generated `h5p.json` (and their recursive dependencies) from the `jagalindo/h5p-cli` Docker image before creating the archive automatically.
 
 ## Requirements
 - Python 3.8+
@@ -37,13 +37,14 @@ Updating the image ensures the bundled H5P libraries are up to date.
 ```bash
 python script.py myslides.pptx -o output_dir --pack
 ```
-The `--pack` flag copies the default H5P libraries from the Docker image and
+The `--pack` flag resolves the dependencies listed in `h5p.json`, copies only
+those libraries (and their own dependencies) from the Docker image and then
 creates a `.h5p` archive. Libraries are copied under `.h5p/libraries` inside the
 output directory but the final archive places them at the package root just like
 `h5p-cli pack` does. Without the flag, you can copy the libraries and zip the
 directory manually:
 ```bash
 docker run --rm -v /path/to/output_dir:/data jagalindo/h5p-cli \
-  sh -c 'mkdir -p /data/.h5p && cp -r /usr/local/lib/h5p/* /data/.h5p/'
+  sh -c 'mkdir -p /data/.h5p && cp -r /usr/local/lib/h5p/<Lib> /data/.h5p/'
 cd output_dir && zip -r ../output_dir.h5p .
 ```
