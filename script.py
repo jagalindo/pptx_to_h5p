@@ -12,6 +12,16 @@ import os
 import json
 import subprocess
 
+
+def copy_extensions(target_dir):
+    """Copy H5P extensions from the Docker image into ``target_dir``."""
+    subprocess.run([
+        "docker", "run", "--rm",
+        "-v", f"{os.path.abspath(target_dir)}:/data",
+        "jagalindo/h5p-cli",
+        "sh", "-c", "cp -r /root/.h5p /data/"
+    ], check=True)
+
 def emu_to_px(emu):
     """Convert EMU (English Metric Unit) to pixels (assuming 96 DPI)."""
     if emu is None:
@@ -169,20 +179,23 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
     print(f"H5P package structure generated in '{output_dir}'.")
     if pack:
         try:
+            copy_extensions(output_dir)
             subprocess.run([
                 "docker", "run", "--rm",
                 "-v", f"{os.path.abspath(output_dir)}:/data",
                 "jagalindo/h5p-cli",
-                "h5p", "pack", "/data"
+                "h5p-cli", "pack", "/data"
             ], check=True)
         except Exception as exc:
             print(f"Packing failed: {exc}")
     else:
-        print("Run the Docker image 'jagalindo/h5p-cli' to create the .h5p archive, for example:")
+        print(
+            "Run the Docker image 'jagalindo/h5p-cli' to copy extensions "
+            "and create the .h5p archive, for example:" )
         abs_dir = os.path.abspath(output_dir)
         print(
             "    docker run --rm -v "
-            f"{abs_dir}:/data jagalindo/h5p-cli h5p pack /data"
+            f"{abs_dir}:/data jagalindo/h5p-cli sh -c 'cp -r /root/.h5p /data/ && h5p-cli pack /data'"
         )
 
 if __name__ == "__main__":
