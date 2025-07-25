@@ -198,7 +198,7 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
         abs_dir = os.path.abspath(output_dir)
         print(
             "    docker run --rm -v "
-            f"{abs_dir}:/data jagalindo/h5p-cli sh -c 'cp -r /root/.h5p /data/ && h5p pack /data || h5p-cli pack /data'"
+            f"{abs_dir}:/data jagalindo/h5p-cli sh -c 'mkdir -p /data/.h5p && cp -r /usr/local/lib/h5p/* /data/.h5p/ && h5p pack /data || h5p-cli pack /data'"
         )
 
 if __name__ == "__main__":
