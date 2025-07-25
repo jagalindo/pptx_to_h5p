@@ -2,9 +2,10 @@
 
 This script extracts images, text (with basic formatting), simple shapes and
 media from a PowerPoint file and builds the folder structure expected for an
-H5P Course Presentation.  Passing ``--pack`` will also copy the standard H5P
+H5P Course Presentation.  Passing ``--pack`` will copy the necessary H5P
 libraries from the ``jagalindo/h5p-cli`` Docker image and zip the directory
-into a ``.h5p`` file.
+into a ``.h5p`` file.  Only the libraries referenced in ``h5p.json`` are
+copied by default; use ``-r`` to resolve dependencies recursively.
 """
 
 from pptx import Presentation
@@ -100,8 +101,14 @@ def _collect_dependencies(machine_name, major, minor, seen):
         )
 
 
-def copy_extensions(target_dir):
-    """Copy only the required H5P libraries into ``target_dir``."""
+def copy_extensions(target_dir, recursive=False):
+    """Copy the required H5P libraries into ``target_dir``.
+
+    When ``recursive`` is ``False`` (the default) only the libraries listed in
+    ``h5p.json`` are copied.  If ``True`` the dependencies of those libraries
+    are resolved recursively using ``library.json`` files inside the Docker
+    image.
+    """
 
     h5p_json_path = os.path.join(target_dir, "h5p.json")
     with open(h5p_json_path, "r", encoding="utf-8") as f:
@@ -109,12 +116,13 @@ def copy_extensions(target_dir):
 
     libs = set()
     for dep in h5p_def.get("preloadedDependencies", []):
-        _collect_dependencies(
-            dep.get("machineName"),
-            dep.get("majorVersion"),
-            dep.get("minorVersion"),
-            libs,
-        )
+        machine = dep.get("machineName")
+        major = dep.get("majorVersion")
+        minor = dep.get("minorVersion")
+        if recursive:
+            _collect_dependencies(machine, major, minor, libs)
+        else:
+            libs.add(f"{machine}-{major}.{minor}")
 
     if not libs:
         return
@@ -178,7 +186,7 @@ def create_h5p_archive(source_dir, archive_path=None):
                         zf.write(fpath, arcname)
     return archive_path
 
-def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
+def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False, recursive=False):
     """
     Converts a PPTX file into an H5P Course Presentation package structure.
 
@@ -187,6 +195,8 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
       output_dir -- destination folder for the generated H5P directory tree.
       pack -- when ``True`` copy the H5P libraries using Docker and create
               a ``.h5p`` archive by zipping the directory.
+      recursive -- if ``pack`` is set, copy library dependencies recursively
+                   instead of only those listed in ``h5p.json``.
 
     The resulting folder contains ``h5p.json`` plus a ``content`` directory
     with ``content.json`` and copied media assets.  Images are stored in
@@ -346,7 +356,7 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
     print(f"H5P package structure generated in '{output_dir}'.")
     if pack:
         try:
-            copy_extensions(output_dir)
+            copy_extensions(output_dir, recursive=recursive)
             archive = create_h5p_archive(output_dir)
             print(f"Packed into '{archive}'.")
         except Exception as exc:
@@ -378,7 +388,15 @@ if __name__ == "__main__":
             "zip the result into a .h5p file"
         ),
     )
+    parser.add_argument(
+        "-r",
+        "--recursive",
+        action="store_true",
+        help=(
+            "When packing, resolve and copy library dependencies recursively"
+        ),
+    )
     args = parser.parse_args()
 
-    convert_pptx_to_h5p(args.pptx_file, args.output, pack=args.pack)
+    convert_pptx_to_h5p(args.pptx_file, args.output, pack=args.pack, recursive=args.recursive)
 
