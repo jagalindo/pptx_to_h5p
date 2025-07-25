@@ -172,17 +172,17 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
             subprocess.run([
                 "docker", "run", "--rm",
                 "-v", f"{os.path.abspath(output_dir)}:/data",
-                "jagalindo/h5p_cli_docker",
+                "jagalindo/h5p-cli",
                 "h5p", "pack", "/data"
             ], check=True)
         except Exception as exc:
             print(f"Packing failed: {exc}")
     else:
-        print("Run the Docker image 'jagalindo/h5p_cli_docker' to create the .h5p archive, for example:")
+        print("Run the Docker image 'jagalindo/h5p-cli' to create the .h5p archive, for example:")
         abs_dir = os.path.abspath(output_dir)
         print(
             "    docker run --rm -v "
-            f"{abs_dir}:/data jagalindo/h5p_cli_docker h5p pack /data"
+            f"{abs_dir}:/data jagalindo/h5p-cli h5p pack /data"
         )
 
 if __name__ == "__main__":
