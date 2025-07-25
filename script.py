@@ -185,7 +185,8 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
                 "docker", "run", "--rm",
                 "-v", f"{os.path.abspath(output_dir)}:/data",
                 "jagalindo/h5p-cli",
-                "h5p-cli", "pack", "/data"
+                "sh", "-c",
+                "h5p-cli pack /data"
             ], check=True)
         except Exception as exc:
             print(f"Packing failed: {exc}")
