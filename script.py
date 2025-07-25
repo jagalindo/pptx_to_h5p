@@ -212,7 +212,7 @@ if __name__ == "__main__":
         action="store_true",
         help=(
             "Pack the generated directory into an .h5p file using the "
-            "jagalindo/h5p_cli_docker image"
+            "jagalindo/h5p-cli Docker image"
         ),
     )
     args = parser.parse_args()
