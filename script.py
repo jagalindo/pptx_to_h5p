@@ -1,9 +1,10 @@
 """Simple PowerPoint (PPTX) to H5P Course Presentation converter.
 
 This script extracts images, text (with basic formatting), simple shapes and
-media from a PowerPoint file and builds the folder structure expected by
-``h5p pack`` (or ``h5p-cli pack``). Pass ``--pack`` on the command line to
-automatically invoke the CLI once conversion finishes.
+media from a PowerPoint file and builds the folder structure expected for an
+H5P Course Presentation.  Passing ``--pack`` will also copy the standard H5P
+libraries from the ``jagalindo/h5p-cli`` Docker image and zip the directory
+into a ``.h5p`` file.
 """
 
 from pptx import Presentation
@@ -11,6 +12,7 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE
 import os
 import json
 import subprocess
+import zipfile
 
 
 def copy_extensions(target_dir):
@@ -29,6 +31,21 @@ def emu_to_px(emu):
         return 0
     return int(emu / 9525)  # 1 pixel = 9525 EMUs at 96 DPI
 
+
+def create_h5p_archive(source_dir, archive_path=None):
+    """Create a .h5p file by zipping ``source_dir``."""
+    if archive_path is None:
+        archive_path = os.path.abspath(source_dir) + ".h5p"
+    elif not archive_path.endswith(".h5p"):
+        archive_path += ".h5p"
+    with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, _, files in os.walk(source_dir):
+            for fname in files:
+                fpath = os.path.join(root, fname)
+                arcname = os.path.relpath(fpath, source_dir)
+                zf.write(fpath, arcname)
+    return archive_path
+
 def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
     """
     Converts a PPTX file into an H5P Course Presentation package structure.
@@ -36,8 +53,8 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
     Parameters:
       input_pptx -- path to the ``.pptx`` file.
       output_dir -- destination folder for the generated H5P directory tree.
-      pack -- when ``True`` automatically invoke ``h5p`` (or ``h5p-cli``)
-              to pack the output directory.
+      pack -- when ``True`` copy the H5P libraries using Docker and create
+              a ``.h5p`` archive by zipping the directory.
 
     The resulting folder contains ``h5p.json`` plus a ``content`` directory
     with ``content.json`` and copied media assets.  Images are stored in
@@ -182,23 +199,21 @@ def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
     if pack:
         try:
             copy_extensions(output_dir)
-            subprocess.run([
-                "docker", "run", "--rm",
-                "-v", f"{os.path.abspath(output_dir)}:/data",
-                "jagalindo/h5p-cli",
-                "sh", "-c",
-                "h5p pack /data || h5p-cli pack /data"
-            ], check=True)
+            archive = create_h5p_archive(output_dir)
+            print(f"Packed into '{archive}'.")
         except Exception as exc:
             print(f"Packing failed: {exc}")
     else:
         print(
-            "Run the Docker image 'jagalindo/h5p-cli' to copy extensions "
-            "and create the .h5p archive, for example:" )
+            "Run the Docker image 'jagalindo/h5p-cli' to copy H5P libraries "
+            "and then zip the directory into an .h5p file. For example:" )
         abs_dir = os.path.abspath(output_dir)
         print(
             "    docker run --rm -v "
-            f"{abs_dir}:/data jagalindo/h5p-cli sh -c 'mkdir -p /data/.h5p && cp -r /usr/local/lib/h5p/* /data/.h5p/ && h5p pack /data || h5p-cli pack /data'"
+            f"{abs_dir}:/data jagalindo/h5p-cli sh -c 'mkdir -p /data/.h5p && cp -r /usr/local/lib/h5p/* /data/.h5p/'"
+        )
+        print(
+            f"    (cd {abs_dir} && zip -r ../{os.path.basename(abs_dir)}.h5p .)"
         )
 
 if __name__ == "__main__":
@@ -211,8 +226,8 @@ if __name__ == "__main__":
         "--pack",
         action="store_true",
         help=(
-            "Pack the generated directory into an .h5p file using the "
-            "jagalindo/h5p-cli Docker image"
+            "Copy libraries from the jagalindo/h5p-cli Docker image and "
+            "zip the result into a .h5p file"
         ),
     )
     args = parser.parse_args()
