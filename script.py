@@ -14,6 +14,8 @@ import subprocess
 
 def emu_to_px(emu):
     """Convert EMU (English Metric Unit) to pixels (assuming 96 DPI)."""
+    if emu is None:
+        return 0
     return int(emu / 9525)  # 1 pixel = 9525 EMUs at 96 DPI
 
 def convert_pptx_to_h5p(input_pptx, output_dir='h5p_content', pack=False):
