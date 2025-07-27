@@ -48,8 +48,9 @@ The `--pack` flag copies the libraries listed in `h5p.json` from the Docker
 image and creates a `.h5p` archive. Add `-r` to also copy any dependencies of
 those libraries recursively. Libraries are copied under `.h5p/libraries` inside
 the output directory but the final archive places them at the package root just
-like `h5p-cli pack` does. Without the flag, you can copy the libraries and zip
-the directory manually:
+like `h5p-cli pack` does. When packing, common development artifacts such as
+`.git` folders or `tests` directories are automatically skipped. Without the
+flag, you can copy the libraries and zip the directory manually:
 ```bash
 docker run --rm -v /path/to/output_dir:/data jagalindo/h5p-cli \
   sh -c 'mkdir -p /data/.h5p && cp -r /usr/local/lib/h5p/<Lib> /data/.h5p/'

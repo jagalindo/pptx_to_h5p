@@ -164,12 +164,16 @@ def create_h5p_archive(source_dir, archive_path=None):
 
     library_root = os.path.join(source_dir, ".h5p", "libraries")
 
+    # Names of files or directories that should be ignored when packaging
+    unwanted = {".git", ".babelrc", ".github", "tests"}
+
     with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for root, _, files in os.walk(source_dir):
+        for root, dirs, files in os.walk(source_dir):
             # Skip the internal .h5p directory altogether
             if os.path.relpath(root, source_dir).startswith(".h5p"):
                 continue
-            for fname in files:
+            dirs[:] = [d for d in dirs if d not in unwanted]
+            for fname in [f for f in files if f not in unwanted]:
                 fpath = os.path.join(root, fname)
                 arcname = os.path.relpath(fpath, source_dir)
                 zf.write(fpath, arcname)
@@ -178,9 +182,12 @@ def create_h5p_archive(source_dir, archive_path=None):
         # archive root.  Only copy the libraries themselves.
         if os.path.isdir(library_root):
             for lib in os.listdir(library_root):
+                if lib in unwanted:
+                    continue
                 lib_path = os.path.join(library_root, lib)
-                for root, _, files in os.walk(lib_path):
-                    for fname in files:
+                for root, dirs, files in os.walk(lib_path):
+                    dirs[:] = [d for d in dirs if d not in unwanted]
+                    for fname in [f for f in files if f not in unwanted]:
                         fpath = os.path.join(root, fname)
                         arcname = os.path.relpath(fpath, library_root)
                         zf.write(fpath, arcname)
